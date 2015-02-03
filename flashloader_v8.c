@@ -138,7 +138,14 @@ static void GetVersion(void);
 static U08 QSPI_quad_write_status_eon(U08 status1);
 
 
-
+inline void Delay(int n)
+{
+  Register i = 0;
+  for(i = 0; i < n; ++i)
+  {
+    asm("nop;");
+  }
+}
 //---------- functions definition --------------------------------------------//
 int main()
 {
@@ -176,7 +183,7 @@ int main()
     ScanParameter(buf, &promSize, &checkSum);
   }
 //  InitUart(mybaud);
-//  DebugOutput("tagAdd ", tagAdd);
+  DebugOutput("chipmode ", chipmode);
 //  DebugOutput("tagVal ", tagVal);
 //  DebugOutput("eraseTag ", eraseTag);
 //  DebugOutput("writeTag ", writeTag);
@@ -501,7 +508,10 @@ int main()
  
     }
     if(chipmode==1)
-      QSPI_non_quad_write_status_value(1, 0x0, 0x42);
+    {
+      //QSPI_non_quad_write_status_value(1, 0x0, 0x42);   //Full Write Protected
+      QSPI_non_quad_write_status_value(1, 0x0C, 0x42);   //3/4 Write Protected
+    }
     else
       QSPI_quad_write_status_eon(0x40);
     gps1sputs("END",0,mybaud);
@@ -765,6 +775,28 @@ static U08 QUAD_SPI_DATA_NON_QUAD_BYTE_READ()
   return (data_nibble);
 }
 
+#define UNIQUE_ID_SIZE    12
+inline U08 QSPI_non_quad_read_4BH()
+{
+  int i;
+  U32 val[UNIQUE_ID_SIZE];
+  QUAD_SPI_ACTIVATE();
+  QUAD_SPI_NON_QUAD_CMD(0x4B);//issue 
+  //val=QUAD_SPI_DATA_NON_QUAD_BYTE_READ();
+  for(i=0;i<UNIQUE_ID_SIZE;++i)
+  {
+    //Delay(5);
+    val[i] = (U32)QUAD_SPI_DATA_NON_QUAD_BYTE_READ();
+  }
+  QUAD_SPI_DEACTIVATE();
+  for(i=4;i<UNIQUE_ID_SIZE;++i)
+  {
+
+    DebugOutput("U ", val[i]);
+  }  
+  return val[4];
+}
+
 U08 QSPI_readid(U08 *mid, U16 *did)
 {
   QUAD_SPI_ACTIVATE();
@@ -888,6 +920,16 @@ static U08 QSPI_non_quad_read_status_1()
   QUAD_SPI_DEACTIVATE();
   return val;
 }
+static U08 QSPI_non_quad_read_status_2()
+{
+  U08 val;
+  QUAD_SPI_ACTIVATE();
+  QUAD_SPI_NON_QUAD_CMD(W25Q40_CMD_READ_STATUS_REG_2);//issue 
+  val=QUAD_SPI_DATA_NON_QUAD_BYTE_READ();
+  QUAD_SPI_DEACTIVATE();
+  return val;
+}
+
 static U08 QSPI_non_quad_page_program(U32 addr, U08 *src, U32 size)
 {
   U08 prog_addr;
@@ -976,6 +1018,7 @@ S08 QSPI_Init(U08 flashtype, U16 flashid)
   volatile unsigned long int *lreg = (volatile unsigned long int *) GPIO_QSPI_ADDR;
   //unsigned long int reg = *lreg;
   //set swcfg && data all high
+  //*lreg  = 0x80000030;
   *lreg  = 0x80000030;
   while((*lreg&0x80000000)==0);
   if(chipmode==1)
@@ -987,11 +1030,68 @@ S08 QSPI_Init(U08 flashtype, U16 flashid)
     //enable non-used bit1~bit3
     reg  |= (0xcUL << SPI_DATA_BIT0);
     *lreg=reg;
+//#if 1
+    QUAD_SPI_ACTIVATE();
+    QUAD_SPI_NON_QUAD_CMD(0xFF);
+    QUAD_SPI_DEACTIVATE();
+    
+    QUAD_SPI_ACTIVATE();
+    QUAD_SPI_CMD(0xFF);
+    QUAD_SPI_DEACTIVATE();
+//#else    
     //winbond at this stage needs to make hold and wp output high
     QUAD_SPI_ACTIVATE();
-    QUAD_SPI_NON_QUAD_CMD(W25Q40_CMD_WRENABLE);
+    QUAD_SPI_NON_QUAD_CMD(W25Q80_CMD_ENABLE_RESET);
     QUAD_SPI_DEACTIVATE();
+    QUAD_SPI_ACTIVATE();
+    QUAD_SPI_NON_QUAD_CMD(W25Q80_CMD_RESET);
+    QUAD_SPI_DEACTIVATE(); 
+        
+    QUAD_SPI_ACTIVATE();
+    QUAD_SPI_CMD(W25Q80_CMD_ENABLE_RESET);
+    QUAD_SPI_DEACTIVATE();
+    QUAD_SPI_ACTIVATE();
+    QUAD_SPI_CMD(W25Q80_CMD_RESET);
+    QUAD_SPI_DEACTIVATE();
+//#endif    
+    //below for old version
+//    volatile U08 cycle;
+//    QUAD_SPI_ACTIVATE();
+//    for(cycle=0;cycle<16;cycle++)
+//    QUAD_SPI_NON_QUAD_CMD(0xff);//issue 0x9f
+//    QUAD_SPI_DEACTIVATE();
+//    QUAD_SPI_ACTIVATE();
+//    Delay(3);
+//    for(cycle=0;cycle<8;cycle++)
+//    QUAD_SPI_NON_QUAD_CMD(0xff);//issue 0x9f
+//    QUAD_SPI_DEACTIVATE();    
+    //QUAD_SPI_ACTIVATE();
+    //QUAD_SPI_NON_QUAD_CMD(W25Q40_CMD_WRENABLE);
+    //QUAD_SPI_DEACTIVATE();
+//    QSPI_non_quad_read_4BH();
+    //U08 status = QSPI_non_quad_read_status_1();
+    //DebugOutput("0sts1 ", status);
+    /*
+    while(status & 0x01)
+    {
+      QUAD_SPI_DATA_NON_QUAD_BYTE_READ();
+      QUAD_SPI_DATA_NON_QUAD_BYTE_READ();
+      QUAD_SPI_DATA_NON_QUAD_BYTE_READ();
+      QUAD_SPI_DATA_NON_QUAD_BYTE_READ();
+
+      status = QSPI_non_quad_read_status_1();
+      DebugOutput("1sts1 ", status);
+    };
+    */
+    DebugOutput("2sts1 ", QSPI_non_quad_read_status_1());
+    DebugOutput("2sts2 ", QSPI_non_quad_read_status_2());
+    //QSPI_non_quad_write_status_value(0, 0x1c, 0x42);
+    //DebugOutput("3sts1 ", QSPI_non_quad_read_status_1());
+    //DebugOutput("3sts2 ", QSPI_non_quad_read_status_2());
+
     QSPI_non_quad_readid(&mid,&did);
+    DebugOutput("mid1 ", mid);
+    DebugOutput("did1 ", did);
   }
   else
   {
@@ -1012,6 +1112,8 @@ S08 QSPI_Init(U08 flashtype, U16 flashid)
     QUAD_SPI_CMD(EON25Q40_CMD_WRENABLE);
     QUAD_SPI_DEACTIVATE();
     QSPI_readid(&mid,&did);
+    DebugOutput("mid0 ", mid);
+    DebugOutput("did0 ", did);
   }
   
   for(whichone=0;whichone<spiflashcount;whichone++)//only 2 entries currently
@@ -1052,7 +1154,7 @@ S08 QSPI_Init(U08 flashtype, U16 flashid)
       QSPI_quad_write_status_eon(0x40);
     }
   }
-
+  DebugOutput("ret ", returnval);
   return returnval;
 }
 
