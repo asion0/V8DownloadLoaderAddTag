@@ -19,6 +19,7 @@
 //#define UART_INIT_BAUDRATE  7 //0: 4800, 1:9600, 2:19200; 3:38400; 4:57600; 5:115200; 6: 230400: 7:460800, 8:921600
 typedef volatile unsigned long Register;
 #define FIRST_2BYTES_WRITE_LAST 1
+#define SHOW_DEBUG_MESSAGE      1
 //---------- local definitions ----------------------------
 
 //---------- local types ----------------------------------
@@ -158,6 +159,16 @@ int main()
   gps1sputs(_LOADER_VER_, 0, mybaud);	
   gps1sputs("END", 0, mybaud);
 
+#ifdef READ_UUID    
+  if(0)
+  {
+    U08 myflashtype = 0;
+    U16 myflashid = 0;
+    QSPI_Init((U08)myflashtype, (U16)myflashid);
+    while(1);
+  }
+#endif
+
   int promSize = 0;
   unsigned char checkSum = 0;
   char buf[DL_BYTES];
@@ -222,12 +233,16 @@ int main()
     
     //try windfirst qspi here
     chipmode = 1;
+DebugOutput("0chipmode ", chipmode);
+
     if(-1 == QSPI_Init((U08)myflashtype, (U16)myflashid))
     {
       //again try eon qspi here
       chipmode = 2;
+DebugOutput("0chipmode ", chipmode);
       if (-1 == QSPI_Init((U08)myflashtype, (U16)myflashid))
       {
+DebugOutput("1chipmode ", chipmode);
         DisableCache();
         if(0 == check_flash(&norId, &norDev, (U08)myflashtype, (U16)myflashid))
         {
@@ -801,9 +816,10 @@ U08 QSPI_readid(U08 *mid, U16 *did)
 {
   QUAD_SPI_ACTIVATE();
   QUAD_SPI_CMD(EON25Q40_CMD_READID);//issue 0x9f
-  *mid=QUAD_SPI_DATA_BYTE_READ();
-  *did=QUAD_SPI_DATA_BYTE_READ();
-  *did=(*did<<8) | (QUAD_SPI_DATA_BYTE_READ());
+  
+  *mid = QUAD_SPI_DATA_BYTE_READ();
+  *did = QUAD_SPI_DATA_BYTE_READ();
+  *did = (*did<<8) | (QUAD_SPI_DATA_BYTE_READ());
   QUAD_SPI_DEACTIVATE();
   return TRUE;
 }
@@ -1068,7 +1084,9 @@ S08 QSPI_Init(U08 flashtype, U16 flashid)
     //QUAD_SPI_ACTIVATE();
     //QUAD_SPI_NON_QUAD_CMD(W25Q40_CMD_WRENABLE);
     //QUAD_SPI_DEACTIVATE();
-//    QSPI_non_quad_read_4BH();
+#ifdef READ_UUID    
+    QSPI_non_quad_read_4BH();
+#endif
     //U08 status = QSPI_non_quad_read_status_1();
     //DebugOutput("0sts1 ", status);
     /*
@@ -1095,23 +1113,39 @@ S08 QSPI_Init(U08 flashtype, U16 flashid)
   }
   else
   {
+DebugOutput("eon_chipmode ", chipmode);
+    
     //andrew 0508 add 12 cycles here
+    /*
     volatile U08 cycle;
     QUAD_SPI_ACTIVATE();
     for(cycle=0;cycle<6;cycle++)
     QUAD_SPI_CMD(0x0);
     QUAD_SPI_DEACTIVATE();
+  */
   
-    //set CLK as an output pin  
-    //*lreg  &= ~(0x1UL << CK_DIR);
-    //set CSN as an output pin
-    //*lreg  &= ~(0x1UL << CSN_DIR);
+    QUAD_SPI_ACTIVATE();
+    QUAD_SPI_CMD(EON25Q80_CMD_ENABLE_RESET);  //0x66
+    QUAD_SPI_DEACTIVATE();
+ 
+    QUAD_SPI_ACTIVATE();
+    QUAD_SPI_CMD(EON25Q80_CMD_RESET);        //0x99
+    QUAD_SPI_DEACTIVATE();
   
+    QUAD_SPI_ACTIVATE();
+    QUAD_SPI_NON_QUAD_CMD(EON25Q80_CMD_ENABLE_RESET); //0x66
+    QUAD_SPI_DEACTIVATE();
+    
+    QUAD_SPI_ACTIVATE();
+    QUAD_SPI_NON_QUAD_CMD(EON25Q80_CMD_RESET);  //0x99
+    QUAD_SPI_DEACTIVATE(); 
+      
     //write enable at quad mode
     QUAD_SPI_ACTIVATE();
     QUAD_SPI_CMD(EON25Q40_CMD_WRENABLE);
     QUAD_SPI_DEACTIVATE();
-    QSPI_readid(&mid,&did);
+    
+    QSPI_readid(&mid, &did);
     DebugOutput("mid0 ", mid);
     DebugOutput("did0 ", did);
   }
@@ -2314,6 +2348,9 @@ void ScanParameter4(char* inBuf, int *binSize, U08 *chkSum, U32 *baud, U32 *tagA
 
 void DebugOutput(const char *title, U32 data)
 {
+  if(!SHOW_DEBUG_MESSAGE)
+    return;
+    
   char buf[128];
   int i = 0;
   while(title[i])

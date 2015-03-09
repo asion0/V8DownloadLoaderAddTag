@@ -1,0 +1,6 @@
+rm -f flashloader.exe
+/cygdrive/c/cygwin/opt/sparc-elf-3.2.3/bin/sparc-elf-gcc.exe -Ttext=0x50000000 -nostdlib -mv8 -O2 -D READ_UUID -D WRITE_TAG -D UART_INIT_BAUDRATE=7 -o flashloader.exe flashloader_v8.c
+/cygdrive/c/cygwin/opt/sparc-elf-3.2.3/bin/sparc-elf-objcopy -O srec flashloader.exe Bin.srec
+mv Bin.srec v8CheckWinbondFlash.srec
+
+ls flashloader.exe -la
