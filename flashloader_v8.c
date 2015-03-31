@@ -19,7 +19,12 @@
 //#define UART_INIT_BAUDRATE  7 //0: 4800, 1:9600, 2:19200; 3:38400; 4:57600; 5:115200; 6: 230400: 7:460800, 8:921600
 typedef volatile unsigned long Register;
 #define FIRST_2BYTES_WRITE_LAST 1
+
+#ifdef NO_DEBUG_MSG
+#define SHOW_DEBUG_MESSAGE      0
+#else
 #define SHOW_DEBUG_MESSAGE      1
+#endif
 //---------- local definitions ----------------------------
 
 //---------- local types ----------------------------------

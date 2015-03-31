@@ -31,7 +31,7 @@
 #define	UART1_PISR			0x2428
 #define	UART1_CESR			0x242c
 //---------- constant definitions --------------------------
-#define 		FLASHTESTSTARADDR		0x0 
+#define FLASHTESTSTARADDR		0x0 
 #define MX_FLASH       0xC2 
 #define	MX29LV400TT			0xB9
 #define FJ_FLASH       0x4  /* manufacturing id */
